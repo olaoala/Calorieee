@@ -1,0 +1,7 @@
+npm verbose cli /usr/bin/node /usr/bin/npm
+npm info using npm@10.9.8
+npm info using node@v22.22.3
+npm verbose title npm install
+npm verbose argv "install" "--no-audit" "--no-fund" "--loglevel" "verbose"
+npm verbose logfile logs-max:10 dir:/sessions/magical-gallant-cannon/.npm/_logs/2026-08-04T21_59_46_928Z-
+npm verbose logfile /sessions/magical-gallant-cannon/.npm/_logs/2026-08-04T21_59_46_928Z-debug-0.log
