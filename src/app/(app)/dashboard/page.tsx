@@ -3,9 +3,8 @@
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { todayStr } from "@/lib/date";
-import type { Meal, MealType, GoalType, Sex, ActivityLevel } from "@/lib/types";
+import type { Meal, MealType, GoalType } from "@/lib/types";
 import { MEAL_TYPES, mealMeta } from "@/lib/mealMeta";
-import { estimateTDEE } from "@/lib/energy";
 import AddFoodSheet from "@/components/AddFoodSheet";
 import ToastHost, { useToast } from "@/components/Toast";
 import Link from "next/link";
@@ -23,7 +22,6 @@ export default function DashboardPage() {
   const [meals, setMeals] = useState<Meal[]>([]);
   const [waterCups, setWaterCups] = useState(0);
   const [waterTarget, setWaterTarget] = useState(8);
-  const [tdee, setTdee] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [sheetType, setSheetType] = useState<MealType | null>(null);
   const { message, show } = useToast();
@@ -35,50 +33,31 @@ export default function DashboardPage() {
     if (!user) return;
     setEmail(user.email ?? "");
 
-    const [{ data: profile }, { data: mealRows }, { data: waterRow }, { data: latestWeight }] =
-      await Promise.all([
-        supabase
-          .from("profiles")
-          .select(
-            "daily_goal, water_target, full_name, goal_type, sex, age, height_cm, activity_level"
-          )
-          .eq("id", user.id)
-          .single(),
-        supabase
-          .from("meals")
-          .select("*")
-          .eq("user_id", user.id)
-          .eq("date", todayStr())
-          .order("created_at", { ascending: true }),
-        supabase
-          .from("water_logs")
-          .select("cups")
-          .eq("user_id", user.id)
-          .eq("date", todayStr())
-          .maybeSingle(),
-        supabase
-          .from("weight_logs")
-          .select("weight_kg")
-          .eq("user_id", user.id)
-          .order("date", { ascending: false })
-          .limit(1)
-          .maybeSingle(),
-      ]);
+    const [{ data: profile }, { data: mealRows }, { data: waterRow }] = await Promise.all([
+      supabase
+        .from("profiles")
+        .select("daily_goal, water_target, full_name, goal_type")
+        .eq("id", user.id)
+        .single(),
+      supabase
+        .from("meals")
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("date", todayStr())
+        .order("created_at", { ascending: true }),
+      supabase
+        .from("water_logs")
+        .select("cups")
+        .eq("user_id", user.id)
+        .eq("date", todayStr())
+        .maybeSingle(),
+    ]);
 
     if (profile) {
       setGoal(profile.daily_goal);
       setWaterTarget(profile.water_target ?? 8);
       setFullName(profile.full_name ?? null);
       setGoalType(profile.goal_type ?? "maintain");
-      setTdee(
-        estimateTDEE({
-          sex: (profile.sex as Sex | null) ?? null,
-          age: profile.age ?? null,
-          heightCm: profile.height_cm ?? null,
-          activityLevel: (profile.activity_level as ActivityLevel) ?? "moderate",
-          weightKg: latestWeight?.weight_kg ?? null,
-        })
-      );
     }
     if (mealRows) setMeals(mealRows as Meal[]);
     setWaterCups(waterRow?.cups ?? 0);
@@ -150,15 +129,9 @@ export default function DashboardPage() {
   const initial = (firstName?.[0] ?? email[0] ?? "?").toUpperCase();
   const sheetMeta = sheetType ? mealMeta(sheetType) : null;
 
-  const net = tdee !== null ? consumed - tdee : null;
+  const net = consumed - goal;
   const netIsGood =
-    net === null
-      ? true
-      : goalType === "lose"
-        ? net <= 0
-        : goalType === "gain"
-          ? net >= 0
-          : Math.abs(net) <= 150;
+    goalType === "lose" ? net <= 0 : goalType === "gain" ? net >= 0 : Math.abs(net) <= 150;
 
   return (
     <div className="flex flex-col gap-4 animate-fade-in">
@@ -223,48 +196,36 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {tdee !== null ? (
-        <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-card">
-          <div className="flex items-center gap-2 text-sm font-semibold text-gray-900 mb-3">
-            <Flame size={16} className="text-breakfast" />
-            Calorie balance
-          </div>
-          <div className="grid grid-cols-3 gap-2 text-center">
-            <div>
-              <div className="text-lg font-extrabold text-gray-900">
-                {consumed.toLocaleString()}
-              </div>
-              <div className="text-[11px] text-gray-500">Eaten</div>
-            </div>
-            <div>
-              <div className="text-lg font-extrabold text-gray-900">{tdee.toLocaleString()}</div>
-              <div className="text-[11px] text-gray-500">Est. burned</div>
-            </div>
-            <div>
-              <div
-                className={`text-lg font-extrabold ${netIsGood ? "text-accent" : "text-danger"}`}
-              >
-                {net! > 0 ? "+" : net! < 0 ? "−" : ""}
-                {Math.abs(net!).toLocaleString()}
-              </div>
-              <div className="text-[11px] text-gray-500">
-                {net! > 0 ? "Surplus" : net! < 0 ? "Deficit" : "Balanced"}
-              </div>
-            </div>
-          </div>
-          <p className="text-[11px] text-gray-400 mt-3 leading-relaxed">
-            &ldquo;Est. burned&rdquo; is calculated from your body stats (BMR × activity level),
-            not measured directly — the best estimate possible without a fitness tracker.
-          </p>
+      <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-card">
+        <div className="flex items-center gap-2 text-sm font-semibold text-gray-900 mb-3">
+          <Flame size={16} className="text-breakfast" />
+          Calorie balance
         </div>
-      ) : (
-        <Link
-          href="/profile"
-          className="block bg-white border border-dashed border-gray-300 rounded-xl p-4 text-sm text-gray-500 hover:border-accent hover:text-accent transition-colors"
-        >
-          Add your sex, age, height & activity level in Profile to see your calorie balance →
-        </Link>
-      )}
+        <div className="grid grid-cols-3 gap-2 text-center">
+          <div>
+            <div className="text-lg font-extrabold text-gray-900">
+              {consumed.toLocaleString()}
+            </div>
+            <div className="text-[11px] text-gray-500">Eaten</div>
+          </div>
+          <div>
+            <div className="text-lg font-extrabold text-gray-900">{goal.toLocaleString()}</div>
+            <div className="text-[11px] text-gray-500">Target</div>
+          </div>
+          <div>
+            <div className={`text-lg font-extrabold ${netIsGood ? "text-accent" : "text-danger"}`}>
+              {net > 0 ? "+" : net < 0 ? "−" : ""}
+              {Math.abs(net).toLocaleString()}
+            </div>
+            <div className="text-[11px] text-gray-500">
+              {net > 0 ? "Surplus" : net < 0 ? "Deficit" : "Balanced"}
+            </div>
+          </div>
+        </div>
+        <p className="text-[11px] text-gray-400 mt-3 leading-relaxed">
+          Surplus/deficit is measured against your daily calorie target — set it from Profile.
+        </p>
+      </div>
 
       <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-card">
         <div className="flex items-center justify-between mb-3">

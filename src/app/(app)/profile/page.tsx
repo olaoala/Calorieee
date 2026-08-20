@@ -339,13 +339,14 @@ export default function ProfilePage() {
 
           {bodySaved && (
             <p className="flex items-center gap-1.5 text-xs text-accent">
-              <Check size={13} /> Saved — check your dashboard for your calorie balance.
+              <Check size={13} /> Saved.
             </p>
           )}
         </form>
 
         <p className="text-xs text-gray-400 mt-3">
-          Used with your latest logged weight (Progress page) to estimate daily calories burned.
+          Optional — kept for future features. Your dashboard&apos;s calorie balance is measured
+          against your daily calorie target above, not these stats.
         </p>
       </div>
 
