@@ -1,8 +1,8 @@
 export type QtyUnit = "g" | "bigScoop" | "smallScoop" | "piece";
 
 export const SCOOP_GRAMS: Record<"bigScoop" | "smallScoop", number> = {
-  bigScoop: 50,
-  smallScoop: 25,
+  bigScoop: 75,
+  smallScoop: 45,
 };
 
 export const UNIT_OPTIONS: { value: QtyUnit; label: string }[] = [

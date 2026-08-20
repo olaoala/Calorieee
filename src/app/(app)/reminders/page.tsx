@@ -1,9 +1,17 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { todayStr } from "@/lib/date";
 import type { Reminder } from "@/lib/types";
+import {
+  pushSupported,
+  getExistingSubscription,
+  subscribeToPush,
+  unsubscribeFromPush,
+  subscriptionToPayload,
+} from "@/lib/push";
+
+type PushState = "unsupported" | "checking" | "denied" | "off" | "on";
 
 export default function RemindersPage() {
   const supabase = createClient();
@@ -11,10 +19,9 @@ export default function RemindersPage() {
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [time, setTime] = useState("");
   const [label, setLabel] = useState("");
-  const [permission, setPermission] = useState<NotificationPermission | "unsupported">(
-    "default"
-  );
-  const lastFired = useRef<Record<string, string>>({});
+  const [pushState, setPushState] = useState<PushState>("checking");
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushError, setPushError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const {
@@ -29,38 +36,75 @@ export default function RemindersPage() {
       .eq("user_id", user.id)
       .order("time");
     setReminders((data as Reminder[]) ?? []);
+
+    // Keep the stored timezone current so the reminders cron (which has no
+    // browser to read this from) fires at the right local time.
+    try {
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      if (tz) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("timezone")
+          .eq("id", user.id)
+          .single();
+        if (profile && profile.timezone !== tz) {
+          await supabase.from("profiles").update({ timezone: tz }).eq("id", user.id);
+        }
+      }
+    } catch {
+      // Best-effort — reminders still work off the default timezone.
+    }
   }, [supabase]);
+
+  const refreshPushState = useCallback(async () => {
+    if (!pushSupported()) {
+      setPushState("unsupported");
+      return;
+    }
+    if (Notification.permission === "denied") {
+      setPushState("denied");
+      return;
+    }
+    const sub = await getExistingSubscription();
+    setPushState(sub ? "on" : "off");
+  }, []);
 
   useEffect(() => {
     load();
-    if (typeof window !== "undefined" && "Notification" in window) {
-      setPermission(Notification.permission);
-    } else {
-      setPermission("unsupported");
-    }
-  }, [load]);
+    refreshPushState();
+  }, [load, refreshPushState]);
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const now = new Date();
-      const hhmm = now.toTimeString().slice(0, 5);
-      const stamp = `${todayStr()} ${hhmm}`;
-      reminders.forEach((r) => {
-        if (r.enabled && r.time === hhmm && lastFired.current[r.id] !== stamp) {
-          lastFired.current[r.id] = stamp;
-          if ("Notification" in window && Notification.permission === "granted") {
-            new Notification("Calorie Tracker", { body: r.label });
-          }
-        }
+  async function enablePush() {
+    setPushBusy(true);
+    setPushError(null);
+    try {
+      const sub = await subscribeToPush();
+      const res = await fetch("/api/push/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(subscriptionToPayload(sub)),
       });
-    }, 30000);
-    return () => clearInterval(interval);
-  }, [reminders]);
+      if (!res.ok) throw new Error((await res.json().catch(() => null))?.error ?? "Save failed");
+      setPushState("on");
+    } catch (err) {
+      setPushError(err instanceof Error ? err.message : "Could not enable push notifications.");
+      await refreshPushState();
+    } finally {
+      setPushBusy(false);
+    }
+  }
 
-  async function enableNotifications() {
-    if (!("Notification" in window)) return;
-    const perm = await Notification.requestPermission();
-    setPermission(perm);
+  async function disablePush() {
+    setPushBusy(true);
+    setPushError(null);
+    try {
+      await unsubscribeFromPush();
+      setPushState("off");
+    } catch (err) {
+      setPushError(err instanceof Error ? err.message : "Could not disable push notifications.");
+    } finally {
+      setPushBusy(false);
+    }
   }
 
   async function addReminder(e: React.FormEvent) {
@@ -91,19 +135,38 @@ export default function RemindersPage() {
     <div className="flex flex-col gap-4 animate-fade-in">
       <div className="bg-white border border-gray-200 rounded-xl p-4 sm:p-5 shadow-card">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">
-          Notifications
+          Push notifications
         </h2>
         <p className="text-sm text-gray-500 mb-3">
-          {permission === "unsupported"
-            ? "Notifications are not supported in this browser."
-            : `Permission: ${permission}`}
+          {pushState === "unsupported" &&
+            "Push notifications are not supported in this browser."}
+          {pushState === "checking" && "Checking notification status…"}
+          {pushState === "denied" &&
+            "Notifications are blocked for this site — allow them in your browser's site settings, then reload."}
+          {pushState === "off" &&
+            "Off. Enable to get reminders even when this tab isn't open."}
+          {pushState === "on" && "On — this device will receive reminders in the background."}
         </p>
-        <button
-          onClick={enableNotifications}
-          className="w-full sm:w-auto bg-accent-light text-accent rounded-md px-3 py-2.5 text-sm font-medium"
-        >
-          Enable browser notifications
-        </button>
+        {pushError && (
+          <p className="text-xs text-danger bg-danger-light border border-red-200 rounded-md px-3 py-2 mb-3">
+            {pushError}
+          </p>
+        )}
+        {(pushState === "off" || pushState === "on") && (
+          <button
+            onClick={pushState === "on" ? disablePush : enablePush}
+            disabled={pushBusy}
+            className={`w-full sm:w-auto rounded-md px-3 py-2.5 text-sm font-medium disabled:opacity-60 ${
+              pushState === "on" ? "bg-danger-light text-danger" : "bg-accent-light text-accent"
+            }`}
+          >
+            {pushBusy
+              ? "Working…"
+              : pushState === "on"
+                ? "Disable on this device"
+                : "Enable push notifications"}
+          </button>
+        )}
       </div>
 
       <div className="bg-white border border-gray-200 rounded-xl p-4 sm:p-5 shadow-card">

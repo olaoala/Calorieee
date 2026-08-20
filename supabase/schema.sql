@@ -229,3 +229,40 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
+
+-- ---------- Push reminders ----------
+-- IANA timezone used to evaluate each user's reminder times server-side
+-- (the reminders cron has no browser to read this from otherwise).
+alter table public.profiles add column if not exists timezone text not null default 'Africa/Lagos';
+
+-- Tracks the last local date a reminder actually fired a push, so the cron
+-- (which may run every few minutes, not exactly on the minute) sends each
+-- reminder at most once per day instead of once per cron tick.
+alter table public.reminders add column if not exists last_sent_date date;
+
+-- One row per browser/device push subscription. A user can have several
+-- (phone + laptop); each is pushed to independently and pruned if the
+-- browser reports it gone (410/404).
+create table if not exists public.push_subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  endpoint text not null unique,
+  p256dh text not null,
+  auth text not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists push_subscriptions_user_idx on public.push_subscriptions (user_id);
+
+alter table public.push_subscriptions enable row level security;
+
+drop policy if exists "push_subscriptions: owner read/write" on public.push_subscriptions;
+create policy "push_subscriptions: owner read/write" on public.push_subscriptions
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- ---------- Force PostgREST to pick up the schema changes above ----------
+-- Supabase usually detects DDL automatically, but when columns are added
+-- outside the dashboard's migration flow the API layer can keep serving a
+-- stale cached schema (surfaces as "Could not find the 'x' column of ...
+-- in the schema cache" even though the column exists). This makes the
+-- reload explicit and safe to re-run.
+notify pgrst, 'reload schema';

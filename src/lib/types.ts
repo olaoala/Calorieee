@@ -15,6 +15,7 @@ export interface Profile {
   age: number | null;
   height_cm: number | null;
   activity_level: ActivityLevel;
+  timezone: string;
 }
 
 export interface WaterLog {
@@ -66,4 +67,13 @@ export interface Reminder {
   time: string; // HH:MM
   label: string;
   enabled: boolean;
+  last_sent_date: string | null; // YYYY-MM-DD
+}
+
+export interface PushSubscriptionRow {
+  id: string;
+  user_id: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
 }

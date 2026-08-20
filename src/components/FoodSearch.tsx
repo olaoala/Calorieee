@@ -5,6 +5,7 @@ import type { FoodResult } from "@/app/api/food-search/route";
 import {
   type QtyUnit,
   UNIT_OPTIONS,
+  SCOOP_GRAMS,
   parseGramsBase,
   computeCalories,
   qtyDescriptor,
@@ -163,8 +164,8 @@ export default function FoodSearch({ onUse }: FoodSearchProps) {
             />
             <span className="text-xs text-gray-500 flex-1">
               {unit === "g" && "grams"}
-              {unit === "bigScoop" && "big scoop(s) · 50g each"}
-              {unit === "smallScoop" && "small scoop(s) · 25g each"}
+              {unit === "bigScoop" && `big scoop(s) · ${SCOOP_GRAMS.bigScoop}g each`}
+              {unit === "smallScoop" && `small scoop(s) · ${SCOOP_GRAMS.smallScoop}g each`}
               {unit === "piece" && `piece(s) · ${picked.unitLabel} each`}
             </span>
             <button

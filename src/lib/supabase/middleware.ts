@@ -4,6 +4,14 @@ import { NextResponse, type NextRequest } from "next/server";
 type CookieToSet = { name: string; value: string; options: CookieOptions };
 
 export async function updateSession(request: NextRequest) {
+  // API routes authenticate themselves (session cookie for user-scoped
+  // routes, a bearer secret for the cron-triggered reminders route) — the
+  // cron in particular has no browser session, so it must not be caught by
+  // the redirect-to-/login logic below.
+  if (request.nextUrl.pathname.startsWith("/api/")) {
+    return NextResponse.next({ request });
+  }
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(
