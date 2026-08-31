@@ -52,7 +52,7 @@ npm install
 
 ## Data model
 
-- `profiles` — one row per user: `daily_goal`, `water_target`, `weight_goal_kg`, body stats (`sex`, `age`, `height_cm`, `activity_level`) used for the calorie-balance estimate, and `timezone` (auto-detected client-side, used by the reminders cron).
+- `profiles` — one row per user: `daily_goal`, `water_target`, `weight_goal_kg`, and `timezone` (auto-detected client-side, used by the reminders cron). Calorie balance (surplus/deficit) is measured against `daily_goal`.
 - `meals` — logged meals per day (`date`, `type`, `name`, `calories`).
 - `meal_templates` — reusable meal building blocks.
 - `meal_plans` / `meal_plan_items` — named plans made of templates; "Apply to today" inserts each template's meal into today's log.

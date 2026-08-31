@@ -39,4 +39,5 @@ declare module "lucide-react" {
   export const Scale: LucideIcon;
   export const Ruler: LucideIcon;
   export const Activity: LucideIcon;
+  export const ChevronDown: LucideIcon;
 }

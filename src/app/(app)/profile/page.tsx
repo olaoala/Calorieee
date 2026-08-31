@@ -12,15 +12,8 @@ import {
   Database,
   Check,
 } from "lucide-react";
-import type { Sex, ActivityLevel } from "@/lib/types";
-import { ACTIVITY_OPTIONS } from "@/lib/energy";
 
 type EditKey = "goal" | "weightGoal" | "water" | null;
-
-const SEX_OPTIONS: { value: Sex; label: string }[] = [
-  { value: "female", label: "Female" },
-  { value: "male", label: "Male" },
-];
 
 export default function ProfilePage() {
   const supabase = createClient();
@@ -37,16 +30,6 @@ export default function ProfilePage() {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Body & activity — its own form/state, since all four fields are needed
-  // together before a calorie balance can be computed.
-  const [sexDraft, setSexDraft] = useState<Sex | "">("");
-  const [ageDraft, setAgeDraft] = useState("");
-  const [heightDraft, setHeightDraft] = useState("");
-  const [activityDraft, setActivityDraft] = useState<ActivityLevel>("moderate");
-  const [bodySaving, setBodySaving] = useState(false);
-  const [bodySaved, setBodySaved] = useState(false);
-  const [bodyError, setBodyError] = useState<string | null>(null);
-
   const load = useCallback(async () => {
     const {
       data: { user },
@@ -55,12 +38,10 @@ export default function ProfilePage() {
     setUserId(user.id);
     setEmail(user.email ?? "");
 
-    const [{ data: profile }, { data: latestWeight }] = await Promise.all([
+    const [{ data: profile, error: profileError }, { data: latestWeight }] = await Promise.all([
       supabase
         .from("profiles")
-        .select(
-          "daily_goal, water_target, weight_goal_kg, full_name, sex, age, height_cm, activity_level"
-        )
+        .select("daily_goal, water_target, weight_goal_kg, full_name")
         .eq("id", user.id)
         .single(),
       supabase
@@ -72,19 +53,12 @@ export default function ProfilePage() {
         .maybeSingle(),
     ]);
 
+    if (profileError) setError(profileError.message);
     if (profile) {
       setGoal(profile.daily_goal);
       setWaterTarget(profile.water_target ?? 8);
       setWeightGoal(profile.weight_goal_kg);
       setFullName(profile.full_name ?? null);
-      setSexDraft(profile.sex ?? "");
-      setAgeDraft(profile.age !== null && profile.age !== undefined ? String(profile.age) : "");
-      setHeightDraft(
-        profile.height_cm !== null && profile.height_cm !== undefined
-          ? String(profile.height_cm)
-          : ""
-      );
-      setActivityDraft(profile.activity_level ?? "moderate");
     }
     setCurrentWeight(latestWeight?.weight_kg ?? null);
     setLoading(false);
@@ -129,47 +103,6 @@ export default function ProfilePage() {
     setEditing(null);
     setSaved(true);
     setTimeout(() => setSaved(false), 1800);
-  }
-
-  async function saveBodyStats(e: React.FormEvent) {
-    e.preventDefault();
-    if (!userId) return;
-    setBodyError(null);
-
-    if (!sexDraft) {
-      setBodyError("Select your sex.");
-      return;
-    }
-    const ageNum = parseInt(ageDraft, 10);
-    if (isNaN(ageNum) || ageNum < 10 || ageNum > 100) {
-      setBodyError("Enter a valid age between 10 and 100.");
-      return;
-    }
-    const heightNum = parseFloat(heightDraft);
-    if (isNaN(heightNum) || heightNum < 100 || heightNum > 250) {
-      setBodyError("Enter a valid height between 100 and 250 cm.");
-      return;
-    }
-
-    setBodySaving(true);
-    const { error: updateError } = await supabase
-      .from("profiles")
-      .update({
-        sex: sexDraft,
-        age: ageNum,
-        height_cm: heightNum,
-        activity_level: activityDraft,
-      })
-      .eq("id", userId);
-    setBodySaving(false);
-
-    if (updateError) {
-      setBodyError(updateError.message);
-      return;
-    }
-
-    setBodySaved(true);
-    setTimeout(() => setBodySaved(false), 2200);
   }
 
   if (loading) {
@@ -248,106 +181,6 @@ export default function ProfilePage() {
         >
           <EditForm draft={draft} setDraft={setDraft} onSubmit={saveEdit} step={1} unit="cups" />
         </SettingRow>
-      </div>
-
-      <div className="bg-white border border-gray-200 rounded-xl shadow-card p-4">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">
-          Body & activity
-        </h2>
-
-        <form onSubmit={saveBodyStats} className="flex flex-col gap-3">
-          <div>
-            <label className="text-xs font-semibold text-gray-500 mb-1.5 block">Sex</label>
-            <div className="flex gap-2">
-              {SEX_OPTIONS.map((o) => (
-                <button
-                  key={o.value}
-                  type="button"
-                  onClick={() => setSexDraft(o.value)}
-                  className={`flex-1 py-2 rounded-md text-sm font-semibold border-2 transition-colors ${
-                    sexDraft === o.value
-                      ? "border-accent bg-accent-light text-accent-dark"
-                      : "border-gray-200 text-gray-600"
-                  }`}
-                >
-                  {o.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-semibold text-gray-500 mb-1.5 block">Age</label>
-              <input
-                type="number"
-                min={10}
-                max={100}
-                value={ageDraft}
-                onChange={(e) => setAgeDraft(e.target.value)}
-                placeholder="years"
-                className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-gray-500 mb-1.5 block">
-                Height (cm)
-              </label>
-              <input
-                type="number"
-                min={100}
-                max={250}
-                step={0.5}
-                value={heightDraft}
-                onChange={(e) => setHeightDraft(e.target.value)}
-                placeholder="cm"
-                className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="text-xs font-semibold text-gray-500 mb-1.5 block">
-              Activity level
-            </label>
-            <select
-              value={activityDraft}
-              onChange={(e) => setActivityDraft(e.target.value as ActivityLevel)}
-              className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm bg-white"
-            >
-              {ACTIVITY_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {bodyError && (
-            <p className="text-xs text-danger bg-danger-light border border-red-200 rounded-md px-3 py-2">
-              {bodyError}
-            </p>
-          )}
-
-          <button
-            type="submit"
-            disabled={bodySaving}
-            className="bg-accent text-white rounded-md py-2.5 text-sm font-medium disabled:opacity-60"
-          >
-            {bodySaving ? "Saving…" : "Save body & activity"}
-          </button>
-
-          {bodySaved && (
-            <p className="flex items-center gap-1.5 text-xs text-accent">
-              <Check size={13} /> Saved.
-            </p>
-          )}
-        </form>
-
-        <p className="text-xs text-gray-400 mt-3">
-          Optional — kept for future features. Your dashboard&apos;s calorie balance is measured
-          against your daily calorie target above, not these stats.
-        </p>
       </div>
 
       <div className="bg-white border border-gray-200 rounded-xl shadow-card overflow-hidden">

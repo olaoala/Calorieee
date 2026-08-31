@@ -1,7 +1,5 @@
 export type MealType = "breakfast" | "lunch" | "dinner" | "snack";
 export type GoalType = "lose" | "maintain" | "gain";
-export type Sex = "male" | "female";
-export type ActivityLevel = "sedentary" | "light" | "moderate" | "active" | "very_active";
 
 export interface Profile {
   id: string;
@@ -11,10 +9,6 @@ export interface Profile {
   water_target: number;
   weight_goal_kg: number | null;
   onboarded: boolean;
-  sex: Sex | null;
-  age: number | null;
-  height_cm: number | null;
-  activity_level: ActivityLevel;
   timezone: string;
 }
 

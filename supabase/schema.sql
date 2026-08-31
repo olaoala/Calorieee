@@ -83,13 +83,15 @@ alter table public.profiles add column if not exists water_target integer not nu
 alter table public.profiles add column if not exists weight_goal_kg numeric;
 alter table public.profiles add column if not exists onboarded boolean not null default false;
 
--- Body stats used to estimate daily calorie burn (Mifflin-St Jeor BMR x
--- activity level). Optional — the app just can't show a calorie balance
--- until these plus a weight_logs entry are present.
-alter table public.profiles add column if not exists sex text;
-alter table public.profiles add column if not exists age integer;
-alter table public.profiles add column if not exists height_cm numeric;
-alter table public.profiles add column if not exists activity_level text not null default 'moderate';
+-- Body stats (sex/age/height/activity) were briefly used for a BMR-based
+-- calorie-balance estimate. Dropped — calorie balance is now measured
+-- against daily_goal instead. Dropping the columns also drops their check
+-- constraints, so this is safe to re-run even on a database that never had
+-- them (nothing to drop).
+alter table public.profiles drop column if exists sex;
+alter table public.profiles drop column if exists age;
+alter table public.profiles drop column if exists height_cm;
+alter table public.profiles drop column if exists activity_level;
 
 -- Defense-in-depth: the app already validates these ranges client-side,
 -- but bounds are enforced at the database level too so a bad direct API
@@ -101,19 +103,6 @@ begin
   ) then
     alter table public.profiles
       add constraint profiles_goal_type_check check (goal_type in ('lose', 'maintain', 'gain'));
-  end if;
-  if not exists (
-    select 1 from pg_constraint where conname = 'profiles_sex_check'
-  ) then
-    alter table public.profiles
-      add constraint profiles_sex_check check (sex is null or sex in ('male', 'female'));
-  end if;
-  if not exists (
-    select 1 from pg_constraint where conname = 'profiles_activity_level_check'
-  ) then
-    alter table public.profiles
-      add constraint profiles_activity_level_check
-      check (activity_level in ('sedentary', 'light', 'moderate', 'active', 'very_active'));
   end if;
   if not exists (
     select 1 from pg_constraint where conname = 'profiles_daily_goal_check'
@@ -133,19 +122,6 @@ begin
     alter table public.profiles
       add constraint profiles_weight_goal_check
       check (weight_goal_kg is null or (weight_goal_kg > 0 and weight_goal_kg <= 500));
-  end if;
-  if not exists (
-    select 1 from pg_constraint where conname = 'profiles_age_check'
-  ) then
-    alter table public.profiles
-      add constraint profiles_age_check check (age is null or (age > 0 and age <= 120));
-  end if;
-  if not exists (
-    select 1 from pg_constraint where conname = 'profiles_height_check'
-  ) then
-    alter table public.profiles
-      add constraint profiles_height_check
-      check (height_cm is null or (height_cm > 0 and height_cm <= 300));
   end if;
 end $$;
 
