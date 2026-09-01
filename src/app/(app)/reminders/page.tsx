@@ -17,6 +17,7 @@ export default function RemindersPage() {
   const supabase = createClient();
   const [userId, setUserId] = useState<string | null>(null);
   const [reminders, setReminders] = useState<Reminder[]>([]);
+  const [loading, setLoading] = useState(true);
   const [time, setTime] = useState("");
   const [label, setLabel] = useState("");
   const [pushState, setPushState] = useState<PushState>("checking");
@@ -36,6 +37,7 @@ export default function RemindersPage() {
       .eq("user_id", user.id)
       .order("time");
     setReminders((data as Reminder[]) ?? []);
+    setLoading(false);
 
     // Keep the stored timezone current so the reminders cron (which has no
     // browser to read this from) fires at the right local time.
@@ -201,7 +203,12 @@ export default function RemindersPage() {
         <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">
           Your reminders
         </h2>
-        {reminders.length === 0 ? (
+        {loading ? (
+          <div className="flex flex-col gap-2 animate-pulse">
+            <div className="h-9 bg-gray-100 rounded-md" />
+            <div className="h-9 bg-gray-100 rounded-md" />
+          </div>
+        ) : reminders.length === 0 ? (
           <p className="text-sm text-gray-400">No reminders set.</p>
         ) : (
           <ul className="flex flex-col divide-y divide-gray-100">

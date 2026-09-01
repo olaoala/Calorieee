@@ -159,7 +159,13 @@ export default function HistoryPage() {
         )}
       </div>
 
-      {!loading && (
+      {loading ? (
+        <div className="flex flex-col gap-2.5 animate-pulse">
+          <div className="h-14 bg-white border border-gray-200 rounded-xl" />
+          <div className="h-14 bg-white border border-gray-200 rounded-xl" />
+          <div className="h-14 bg-white border border-gray-200 rounded-xl" />
+        </div>
+      ) : (
         <div className="bg-white border border-gray-200 rounded-xl shadow-card overflow-hidden">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 px-5 pt-4 pb-2">
             Days
