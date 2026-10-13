@@ -2,11 +2,11 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { headers } from "next/headers";
+import { getSiteUrl } from "@/lib/siteUrl";
 
 export async function signup(formData: FormData) {
   const supabase = await createClient();
-  const origin = (await headers()).get("origin");
+  const siteUrl = getSiteUrl();
 
   const fullName = String(formData.get("full_name") || "").trim();
   const email = String(formData.get("email"));
@@ -23,7 +23,7 @@ export async function signup(formData: FormData) {
     email,
     password,
     options: {
-      emailRedirectTo: `${origin}/auth/callback`,
+      emailRedirectTo: `${siteUrl}/auth/callback?next=/dashboard`,
       // Stashed on auth.users.raw_user_meta_data — the handle_new_user()
       // trigger reads these to seed the profile row at signup time, since
       // there's no session yet to write to `profiles` directly while email

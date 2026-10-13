@@ -27,6 +27,7 @@ export async function getExistingSubscription(): Promise<PushSubscription | null
 export async function subscribeToPush(): Promise<PushSubscription> {
   const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
   if (!vapidPublicKey) throw new Error("Push is not configured (missing VAPID public key).");
+  if (!window.isSecureContext) throw new Error("Push notifications require HTTPS (localhost is allowed). ");
 
   const permission =
     Notification.permission === "granted" ? "granted" : await Notification.requestPermission();
@@ -36,10 +37,14 @@ export async function subscribeToPush(): Promise<PushSubscription> {
   const existing = await registration.pushManager.getSubscription();
   if (existing) return existing;
 
-  return registration.pushManager.subscribe({
-    userVisibleOnly: true,
-    applicationServerKey: urlBase64ToUint8Array(vapidPublicKey) as BufferSource,
-  });
+  try {
+    return await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(vapidPublicKey) as BufferSource,
+    });
+  } catch {
+    throw new Error("The browser could not create a push subscription. Check site permissions and VAPID configuration.");
+  }
 }
 
 export async function unsubscribeFromPush(): Promise<void> {

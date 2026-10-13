@@ -1,111 +1,46 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { useState } from "react";
 import { todayStr } from "@/lib/date";
-import type { Meal, MealType, GoalType } from "@/lib/types";
+import type { MealType } from "@/lib/types";
 import { MEAL_TYPES, mealMeta } from "@/lib/mealMeta";
 import AddFoodSheet from "@/components/AddFoodSheet";
 import ToastHost, { useToast } from "@/components/Toast";
 import Link from "next/link";
 import { Plus, Droplet, Minus, Flame } from "lucide-react";
+import { useMealsForDate } from "@/features/meals/hooks/useMealsForDate";
+import { useDashboardProfile } from "@/features/profile/hooks/useDashboardProfile";
 
 const RADIUS = 50;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
 export default function DashboardPage() {
-  const supabase = createClient();
-  const [email, setEmail] = useState("");
-  const [fullName, setFullName] = useState<string | null>(null);
-  const [goal, setGoal] = useState(2000);
-  const [goalType, setGoalType] = useState<GoalType>("maintain");
-  const [meals, setMeals] = useState<Meal[]>([]);
-  const [waterCups, setWaterCups] = useState(0);
-  const [waterTarget, setWaterTarget] = useState(8);
-  const [loading, setLoading] = useState(true);
+  const today = todayStr();
+  const {
+    email,
+    profile,
+    waterCups,
+    setWaterCups,
+    loading: profileLoading,
+    error: profileError,
+  } = useDashboardProfile(today);
+  const {
+    meals,
+    total: consumed,
+    loading: mealsLoading,
+    error: mealsError,
+    addMeal: addMealForDate,
+    removeMeal,
+  } = useMealsForDate(today);
   const [sheetType, setSheetType] = useState<MealType | null>(null);
   const { message, show } = useToast();
 
-  const load = useCallback(async () => {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return;
-    setEmail(user.email ?? "");
-
-    const [{ data: profile }, { data: mealRows }, { data: waterRow }] = await Promise.all([
-      supabase
-        .from("profiles")
-        .select("daily_goal, water_target, full_name, goal_type")
-        .eq("id", user.id)
-        .single(),
-      supabase
-        .from("meals")
-        .select("*")
-        .eq("user_id", user.id)
-        .eq("date", todayStr())
-        .order("created_at", { ascending: true }),
-      supabase
-        .from("water_logs")
-        .select("cups")
-        .eq("user_id", user.id)
-        .eq("date", todayStr())
-        .maybeSingle(),
-    ]);
-
-    if (profile) {
-      setGoal(profile.daily_goal);
-      setWaterTarget(profile.water_target ?? 8);
-      setFullName(profile.full_name ?? null);
-      setGoalType(profile.goal_type ?? "maintain");
-    }
-    if (mealRows) setMeals(mealRows as Meal[]);
-    setWaterCups(waterRow?.cups ?? 0);
-    setLoading(false);
-  }, [supabase]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  async function setWater(cups: number) {
-    const clamped = Math.max(0, Math.min(waterTarget + 4, cups));
-    setWaterCups(clamped);
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return;
-    await supabase
-      .from("water_logs")
-      .upsert(
-        { user_id: user.id, date: todayStr(), cups: clamped },
-        { onConflict: "user_id,date" }
-      );
-  }
-
   async function addMeal(type: MealType, name: string, calories: number) {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return;
-
-    await supabase.from("meals").insert({
-      user_id: user.id,
-      date: todayStr(),
-      type,
-      name,
-      calories,
-    });
-    await load();
+    await addMealForDate(type, name, calories);
     show(`Added to ${mealMeta(type).label}`);
   }
 
-  async function removeMeal(id: string) {
-    await supabase.from("meals").delete().eq("id", id);
-    load();
-  }
-
-  if (loading) {
+  if (profileLoading || mealsLoading) {
     return (
       <div className="flex flex-col gap-4 animate-pulse">
         <div className="h-40 bg-white border border-gray-200 rounded-2xl" />
@@ -116,7 +51,10 @@ export default function DashboardPage() {
     );
   }
 
-  const consumed = meals.reduce((s, m) => s + m.calories, 0);
+  const goal = profile?.daily_goal ?? 2000;
+  const waterTarget = profile?.water_target ?? 8;
+  const fullName = profile?.full_name ?? null;
+  const goalType = profile?.goal_type ?? "maintain";
   const remaining = goal - consumed;
   const pct = Math.min(consumed / goal, 1) || 0;
   const dashoffset = CIRCUMFERENCE * (1 - pct);
@@ -135,6 +73,11 @@ export default function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-4 animate-fade-in">
+      {(profileError || mealsError) && (
+        <p className="text-sm text-danger bg-danger-light border border-red-200 rounded-md px-3 py-2">
+          {profileError ?? mealsError}
+        </p>
+      )}
       <div className="flex items-center justify-between">
         <div>
           <div className="text-xs font-semibold text-gray-500">{dateLabel}</div>
@@ -235,7 +178,7 @@ export default function DashboardPage() {
           </div>
           <div className="flex items-center gap-2.5">
             <button
-              onClick={() => setWater(waterCups - 1)}
+              onClick={() => setWaterCups(waterCups - 1)}
               className="w-7 h-7 rounded-full border border-gray-200 flex items-center justify-center text-gray-500"
               aria-label="Remove a cup"
             >
@@ -245,7 +188,7 @@ export default function DashboardPage() {
               {waterCups}/{waterTarget}
             </span>
             <button
-              onClick={() => setWater(waterCups + 1)}
+              onClick={() => setWaterCups(waterCups + 1)}
               className="w-7 h-7 rounded-full border border-gray-200 flex items-center justify-center text-gray-500"
               aria-label="Add a cup"
             >
@@ -259,7 +202,7 @@ export default function DashboardPage() {
             return (
               <button
                 key={i}
-                onClick={() => setWater(i + 1)}
+                onClick={() => setWaterCups(i + 1)}
                 aria-label={`Set water to ${i + 1} cups`}
                 className="shrink-0"
               >

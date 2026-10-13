@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { Flame } from "lucide-react";
 import { login } from "./actions";
+import LoginForm from "@/components/LoginForm";
+
+export const dynamic = "force-dynamic";
 
 export default async function LoginPage({
   searchParams,
@@ -28,38 +31,7 @@ export default async function LoginPage({
             </p>
           )}
 
-          <form action={login} className="flex flex-col gap-3">
-            <input
-              type="email"
-              name="email"
-              placeholder="Email"
-              required
-              className="border border-gray-200 rounded-md px-3 py-2.5 text-sm"
-            />
-            <input
-              type="password"
-              name="password"
-              placeholder="Password"
-              autoComplete="current-password"
-              required
-              className="border border-gray-200 rounded-md px-3 py-2.5 text-sm"
-            />
-            <label className="flex items-center gap-2 text-sm text-gray-600 select-none">
-              <input
-                type="checkbox"
-                name="remember"
-                defaultChecked
-                className="w-4 h-4 rounded border-gray-300 text-accent focus:ring-accent"
-              />
-              Remember me
-            </label>
-            <button
-              type="submit"
-              className="bg-accent text-white rounded-md py-2.5 text-sm font-medium mt-1 active:scale-[0.98] transition"
-            >
-              Log in
-            </button>
-          </form>
+          <LoginForm action={login} />
 
           <p className="text-sm text-gray-500 mt-4 text-center">
             No account?{" "}

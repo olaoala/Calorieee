@@ -13,6 +13,7 @@ export async function updateSession(request: NextRequest) {
   }
 
   let response = NextResponse.next({ request });
+  const remember = request.cookies.get("caloriee-remember")?.value === "1";
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -25,17 +26,28 @@ export async function updateSession(request: NextRequest) {
         setAll(cookiesToSet: CookieToSet[]) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
           response = NextResponse.next({ request });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            response.cookies.set(name, value, options)
-          );
+          cookiesToSet.forEach(({ name, value, options }) => {
+            const finalOptions = remember
+              ? options
+              : { ...options, maxAge: undefined, expires: undefined };
+            response.cookies.set(name, value, finalOptions);
+          });
         },
       },
     }
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  let user = null;
+  try {
+    const result = await supabase.auth.getUser();
+    user = result.data.user;
+  } catch (error) {
+    console.error("Supabase session request failed", error);
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    url.searchParams.set("error", "Unable to verify your session. Please try again.");
+    return NextResponse.redirect(url);
+  }
 
   const publicPaths = ["/login", "/signup", "/auth/callback"];
   const isPublic = publicPaths.some((p) => request.nextUrl.pathname.startsWith(p));

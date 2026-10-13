@@ -45,6 +45,19 @@ create table if not exists public.meal_plan_items (
   template_id uuid not null references public.meal_templates(id) on delete cascade
 );
 
+-- 5b. User-defined ordered meal slots. A slot may repeat a type, such as
+-- two snacks, and its label is what the user sees in the daily planner.
+create table if not exists public.meal_schedule (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  position integer not null check (position >= 0),
+  type text not null check (type in ('breakfast', 'lunch', 'dinner', 'snack')),
+  label text not null check (char_length(label) between 1 and 80),
+  unique (user_id, position)
+);
+create index if not exists meal_schedule_user_idx on public.meal_schedule (user_id, position);
+alter table public.meals add column if not exists schedule_id uuid references public.meal_schedule(id) on delete set null;
+
 -- 6. Reminders
 create table if not exists public.reminders (
   id uuid primary key default gen_random_uuid(),
@@ -131,6 +144,7 @@ alter table public.meals enable row level security;
 alter table public.meal_templates enable row level security;
 alter table public.meal_plans enable row level security;
 alter table public.meal_plan_items enable row level security;
+alter table public.meal_schedule enable row level security;
 alter table public.reminders enable row level security;
 alter table public.water_logs enable row level security;
 alter table public.weight_logs enable row level security;
@@ -227,6 +241,10 @@ create table if not exists public.push_subscriptions (
   auth text not null,
   created_at timestamptz not null default now()
 );
+
+drop policy if exists "meal_schedule: owner read/write" on public.meal_schedule;
+create policy "meal_schedule: owner read/write" on public.meal_schedule
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create index if not exists push_subscriptions_user_idx on public.push_subscriptions (user_id);
 
 alter table public.push_subscriptions enable row level security;

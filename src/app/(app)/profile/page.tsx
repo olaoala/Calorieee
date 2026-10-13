@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useState } from "react";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
 import {
   Flame,
   Droplet,
@@ -12,61 +11,25 @@ import {
   Database,
   Check,
 } from "lucide-react";
+import { useProfileSummary } from "@/features/profile/hooks/useProfileSummary";
+import type { ProfileGoalUpdate } from "@/features/profile/services/profileService";
 
 type EditKey = "goal" | "weightGoal" | "water" | null;
 
 export default function ProfilePage() {
-  const supabase = createClient();
-  const [userId, setUserId] = useState<string | null>(null);
-  const [email, setEmail] = useState("");
-  const [fullName, setFullName] = useState<string | null>(null);
-  const [goal, setGoal] = useState(2000);
-  const [waterTarget, setWaterTarget] = useState(8);
-  const [weightGoal, setWeightGoal] = useState<number | null>(null);
-  const [currentWeight, setCurrentWeight] = useState<number | null>(null);
-  const [loading, setLoading] = useState(true);
+  const {
+    userId,
+    email,
+    profile,
+    currentWeight,
+    loading,
+    error: loadError,
+    updateGoals,
+  } = useProfileSummary();
   const [editing, setEditing] = useState<EditKey>(null);
   const [draft, setDraft] = useState("");
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return;
-    setUserId(user.id);
-    setEmail(user.email ?? "");
-
-    const [{ data: profile, error: profileError }, { data: latestWeight }] = await Promise.all([
-      supabase
-        .from("profiles")
-        .select("daily_goal, water_target, weight_goal_kg, full_name")
-        .eq("id", user.id)
-        .single(),
-      supabase
-        .from("weight_logs")
-        .select("weight_kg")
-        .eq("user_id", user.id)
-        .order("date", { ascending: false })
-        .limit(1)
-        .maybeSingle(),
-    ]);
-
-    if (profileError) setError(profileError.message);
-    if (profile) {
-      setGoal(profile.daily_goal);
-      setWaterTarget(profile.water_target ?? 8);
-      setWeightGoal(profile.weight_goal_kg);
-      setFullName(profile.full_name ?? null);
-    }
-    setCurrentWeight(latestWeight?.weight_kg ?? null);
-    setLoading(false);
-  }, [supabase]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
 
   function startEdit(key: EditKey, current: number | null) {
     setEditing(key);
@@ -80,25 +43,18 @@ export default function ProfilePage() {
     const value = parseFloat(draft);
     if (isNaN(value) || value <= 0) return;
 
-    const updates: Record<string, number> = {};
+    const updates: ProfileGoalUpdate = {};
     if (editing === "goal") updates.daily_goal = Math.round(value);
     if (editing === "water") updates.water_target = Math.round(value);
     if (editing === "weightGoal") updates.weight_goal_kg = value;
 
     setError(null);
-    const { error: updateError } = await supabase
-      .from("profiles")
-      .update(updates)
-      .eq("id", userId);
-
-    if (updateError) {
-      setError(updateError.message);
+    try {
+      await updateGoals(updates);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save profile.");
       return;
     }
-
-    if (editing === "goal") setGoal(Math.round(value));
-    if (editing === "water") setWaterTarget(Math.round(value));
-    if (editing === "weightGoal") setWeightGoal(value);
 
     setEditing(null);
     setSaved(true);
@@ -114,6 +70,10 @@ export default function ProfilePage() {
     );
   }
 
+  const fullName = profile?.full_name ?? null;
+  const goal = profile?.daily_goal ?? 2000;
+  const waterTarget = profile?.water_target ?? 8;
+  const weightGoal = profile?.weight_goal_kg ?? null;
   const initial = (fullName?.[0] ?? email[0] ?? "?").toUpperCase();
 
   return (
@@ -142,9 +102,9 @@ export default function ProfilePage() {
           Goals & targets
         </h2>
 
-        {error && (
+        {(loadError || error) && (
           <p className="mx-4 mb-2 text-xs text-danger bg-danger-light border border-red-200 rounded-md px-3 py-2">
-            {error}
+            {error ?? loadError}
           </p>
         )}
 

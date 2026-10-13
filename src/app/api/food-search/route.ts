@@ -1,14 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { searchLocalFoods } from "@/lib/localFoods";
-
-export interface FoodResult {
-  id: string;
-  source: "usda" | "off" | "local";
-  name: string;
-  brand?: string;
-  caloriesPerUnit: number;
-  unitLabel: string;
-}
+import type { FoodResult } from "@/features/food-search/types";
 
 interface UsdaNutrient {
   nutrientName?: string;

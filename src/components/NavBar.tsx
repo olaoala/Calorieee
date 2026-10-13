@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import { signOutCurrentUser } from "@/features/auth/services/authService";
 import {
   Flame,
   LogOut,
@@ -23,10 +23,9 @@ const TABS: { href: string; label: string; icon: LucideIcon }[] = [
 export default function NavBar() {
   const pathname = usePathname();
   const router = useRouter();
-  const supabase = createClient();
 
   async function signOut() {
-    await supabase.auth.signOut();
+    await signOutCurrentUser();
     router.push("/login");
     router.refresh();
   }

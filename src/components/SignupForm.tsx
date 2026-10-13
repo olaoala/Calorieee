@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Check } from "lucide-react";
 import type { GoalType } from "@/lib/types";
 import { signup } from "@/app/signup/actions";
+import PasswordField from "@/components/PasswordField";
 
 const GOAL_OPTIONS: { value: GoalType; label: string; desc: string; suggested: number }[] = [
   { value: "lose", label: "Lose weight", desc: "Gentle calorie deficit", suggested: 1800 },
@@ -75,7 +76,7 @@ export default function SignupForm() {
 
       <div className="mt-1">
         <div className="text-xs font-semibold text-gray-500 mb-2">Daily calorie goal</div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
           <input
             type="number"
             name="daily_goal"
@@ -83,12 +84,12 @@ export default function SignupForm() {
             value={calorieGoal}
             onChange={(e) => setCalorieGoal(e.target.value)}
             required
-            className="flex-1 border border-gray-200 rounded-md px-3 py-2.5 text-sm"
+            className="w-full sm:flex-1 border border-gray-200 rounded-md px-3 py-2.5 text-sm"
           />
           <button
             type="button"
             onClick={() => setCalorieGoal(String(suggested))}
-            className="bg-accent-light text-accent-dark rounded-md px-3 py-2.5 text-xs font-semibold whitespace-nowrap"
+            className="w-full sm:w-auto bg-accent-light text-accent-dark rounded-md px-3 py-2.5 text-xs font-semibold"
           >
             Use suggested ({suggested.toLocaleString()})
           </button>
@@ -96,15 +97,9 @@ export default function SignupForm() {
         <p className="text-xs text-gray-400 mt-1.5">You can change this anytime from your profile.</p>
       </div>
 
-      <input
-        type="password"
-        name="password"
-        placeholder="Password (min 6 characters)"
-        autoComplete="new-password"
-        minLength={6}
-        required
-        className="border border-gray-200 rounded-md px-3 py-2.5 text-sm mt-1"
-      />
+      <div className="mt-1">
+        <PasswordField autoComplete="new-password" placeholder="Password (min 6 characters)" />
+      </div>
 
       <button
         type="submit"

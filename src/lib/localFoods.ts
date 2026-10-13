@@ -1,4 +1,4 @@
-import type { FoodResult } from "@/app/api/food-search/route";
+import type { FoodResult } from "@/features/food-search/types";
 
 // A curated set of common Nigerian and wider West/East African dishes.
 // General food databases (USDA, Open Food Facts) have poor coverage of

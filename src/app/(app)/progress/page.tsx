@@ -1,138 +1,39 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useState } from "react";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
-import { todayStr } from "@/lib/date";
 import { Flame, Scale, Plus } from "lucide-react";
-
-interface DayTotal {
-  date: string;
-  label: string;
-  total: number;
-}
-
-function dateNDaysAgo(n: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - n);
-  return d.toISOString().slice(0, 10);
-}
+import { useProgressData } from "@/features/profile/hooks/useProgressData";
 
 export default function ProgressPage() {
-  const supabase = createClient();
-  const [loading, setLoading] = useState(true);
-  const [goal, setGoal] = useState(2000);
-  const [week, setWeek] = useState<DayTotal[]>([]);
-  const [streak, setStreak] = useState(0);
-  const [avgKcal, setAvgKcal] = useState(0);
-  const [adherence, setAdherence] = useState(0);
-  const [weightSeries, setWeightSeries] = useState<{ date: string; weight_kg: number }[]>([]);
-  const [monthDelta, setMonthDelta] = useState<number | null>(null);
+  const {
+    loading,
+    error,
+    goal,
+    week,
+    streak,
+    avgKcal,
+    adherence,
+    weightSeries,
+    monthDelta,
+    logWeight: saveWeight,
+  } = useProgressData();
   const [showWeightForm, setShowWeightForm] = useState(false);
   const [weightInput, setWeightInput] = useState("");
   const [savingWeight, setSavingWeight] = useState(false);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return;
-
-    const start30 = dateNDaysAgo(29);
-
-    const [{ data: profile }, { data: mealRows }, { data: weightRows }] = await Promise.all([
-      supabase.from("profiles").select("daily_goal").eq("id", user.id).single(),
-      supabase
-        .from("meals")
-        .select("date, calories")
-        .eq("user_id", user.id)
-        .gte("date", start30)
-        .lte("date", todayStr()),
-      supabase
-        .from("weight_logs")
-        .select("date, weight_kg")
-        .eq("user_id", user.id)
-        .order("date", { ascending: true }),
-    ]);
-
-    const dailyGoal = profile?.daily_goal ?? 2000;
-    setGoal(dailyGoal);
-
-    // Build a date -> total-calories map across the last 30 days.
-    const totals: Record<string, number> = {};
-    (mealRows ?? []).forEach((m) => {
-      totals[m.date] = (totals[m.date] ?? 0) + m.calories;
-    });
-
-    // Last 7 days, oldest to newest, for the bar chart.
-    const last7: DayTotal[] = [];
-    for (let i = 6; i >= 0; i--) {
-      const date = dateNDaysAgo(i);
-      const label = new Date(date + "T00:00:00").toLocaleDateString("en-US", { weekday: "narrow" });
-      last7.push({ date, label, total: totals[date] ?? 0 });
-    }
-    setWeek(last7);
-
-    const loggedLast7 = last7.filter((d) => d.total > 0);
-    setAvgKcal(
-      loggedLast7.length
-        ? Math.round(loggedLast7.reduce((s, d) => s + d.total, 0) / loggedLast7.length)
-        : 0
-    );
-    setAdherence(
-      loggedLast7.length
-        ? Math.round((loggedLast7.filter((d) => d.total <= dailyGoal).length / loggedLast7.length) * 100)
-        : 0
-    );
-
-    // Logging streak: consecutive days ending today with at least one meal.
-    let s = 0;
-    for (let i = 0; i < 30; i++) {
-      const date = dateNDaysAgo(i);
-      if (totals[date] > 0) s++;
-      else break;
-    }
-    setStreak(s);
-
-    const weights = weightRows ?? [];
-    setWeightSeries(weights.slice(-10));
-    if (weights.length > 0) {
-      const latest = weights[weights.length - 1];
-      const monthAgo = weights.find((w) => w.date >= start30) ?? weights[0];
-      setMonthDelta(
-        monthAgo.date === latest.date ? null : Math.round((latest.weight_kg - monthAgo.weight_kg) * 10) / 10
-      );
-    } else {
-      setMonthDelta(null);
-    }
-
-    setLoading(false);
-  }, [supabase]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
 
   async function logWeight(e: React.FormEvent) {
     e.preventDefault();
     const kg = parseFloat(weightInput);
     if (!kg || kg <= 0) return;
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return;
     setSavingWeight(true);
-    await supabase
-      .from("weight_logs")
-      .upsert(
-        { user_id: user.id, date: todayStr(), weight_kg: kg },
-        { onConflict: "user_id,date" }
-      );
-    setWeightInput("");
-    setShowWeightForm(false);
-    setSavingWeight(false);
-    load();
+    try {
+      await saveWeight(kg);
+      setWeightInput("");
+      setShowWeightForm(false);
+    } finally {
+      setSavingWeight(false);
+    }
   }
 
   if (loading) {
@@ -150,6 +51,11 @@ export default function ProgressPage() {
 
   return (
     <div className="flex flex-col gap-4 animate-fade-in">
+      {error && (
+        <p className="text-sm text-danger bg-danger-light border border-red-200 rounded-md px-3 py-2">
+          {error}
+        </p>
+      )}
       <div>
         <h1 className="text-xl font-bold text-gray-900">Progress</h1>
         <p className="text-sm text-gray-500 mt-0.5">Last 7 days</p>

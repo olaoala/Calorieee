@@ -1,23 +1,17 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { useState } from "react";
 import { todayStr, daysAgoStr } from "@/lib/date";
-import type { Meal } from "@/lib/types";
 import { MEAL_TYPES } from "@/lib/mealMeta";
 import { CalendarDays, ChevronDown } from "lucide-react";
+import { useMealsForRange } from "@/features/meals/hooks/useMealsForRange";
+import { useProfileSummary } from "@/features/profile/hooks/useProfileSummary";
 
 const RANGE_PRESETS = [
   { label: "7D", days: 6 },
   { label: "14D", days: 13 },
   { label: "30D", days: 29 },
 ];
-
-interface DayGroup {
-  date: string;
-  meals: Meal[];
-  total: number;
-}
 
 function formatDayLabel(dateStr: string): string {
   const d = new Date(`${dateStr}T00:00:00`);
@@ -29,69 +23,31 @@ function formatDayLabel(dateStr: string): string {
 }
 
 export default function HistoryPage() {
-  const supabase = createClient();
   const [startDate, setStartDate] = useState(daysAgoStr(6));
   const [endDate, setEndDate] = useState(todayStr());
-  const [goal, setGoal] = useState(2000);
-  const [meals, setMeals] = useState<Meal[]>([]);
-  const [loading, setLoading] = useState(true);
   const [expandedDate, setExpandedDate] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return;
-
-    const [{ data: profile }, { data: mealRows }] = await Promise.all([
-      supabase.from("profiles").select("daily_goal").eq("id", user.id).single(),
-      supabase
-        .from("meals")
-        .select("*")
-        .eq("user_id", user.id)
-        .gte("date", startDate)
-        .lte("date", endDate)
-        .order("date", { ascending: false })
-        .order("created_at", { ascending: true }),
-    ]);
-
-    if (profile) setGoal(profile.daily_goal);
-    setMeals((mealRows as Meal[]) ?? []);
-    setExpandedDate(null);
-    setLoading(false);
-  }, [supabase, startDate, endDate]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+  const { days, totalConsumed, loading: mealsLoading, error: mealsError } = useMealsForRange(
+    startDate,
+    endDate
+  );
+  const { profile, loading: profileLoading, error: profileError } = useProfileSummary();
 
   function selectPreset(days: number) {
     setStartDate(daysAgoStr(days));
     setEndDate(todayStr());
   }
 
-  const days: DayGroup[] = useMemo(() => {
-    const byDate = new Map<string, Meal[]>();
-    for (const m of meals) {
-      const list = byDate.get(m.date) ?? [];
-      list.push(m);
-      byDate.set(m.date, list);
-    }
-    return [...byDate.entries()]
-      .sort(([a], [b]) => (a < b ? 1 : -1))
-      .map(([date, dayMeals]) => ({
-        date,
-        meals: dayMeals,
-        total: dayMeals.reduce((s, m) => s + m.calories, 0),
-      }));
-  }, [meals]);
-
-  const totalConsumed = meals.reduce((s, m) => s + m.calories, 0);
+  const goal = profile?.daily_goal ?? 2000;
+  const loading = mealsLoading || profileLoading;
   const avgPerDay = days.length > 0 ? Math.round(totalConsumed / days.length) : 0;
 
   return (
     <div className="flex flex-col gap-4 animate-fade-in">
+      {(profileError || mealsError) && (
+        <p className="text-sm text-danger bg-danger-light border border-red-200 rounded-md px-3 py-2">
+          {profileError ?? mealsError}
+        </p>
+      )}
       <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-card">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">
           Date range

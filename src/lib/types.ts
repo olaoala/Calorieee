@@ -31,6 +31,7 @@ export interface Meal {
   user_id: string;
   date: string; // YYYY-MM-DD
   type: MealType;
+  schedule_id: string | null;
   name: string;
   calories: number;
 }
@@ -53,6 +54,14 @@ export interface MealPlanItem {
   id: string;
   plan_id: string;
   template_id: string;
+}
+
+export interface MealScheduleItem {
+  id: string;
+  user_id: string;
+  position: number;
+  type: MealType;
+  label: string;
 }
 
 export interface Reminder {

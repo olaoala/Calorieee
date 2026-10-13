@@ -123,6 +123,7 @@ export async function GET(request: NextRequest) {
   }
 
   let sent = 0;
+  let failed = 0;
   const staleSubIds: string[] = [];
 
   await Promise.all(
@@ -146,6 +147,7 @@ export async function GET(request: NextRequest) {
             );
             sent += 1;
           } catch (err) {
+            failed += 1;
             const statusCode = (err as { statusCode?: number }).statusCode;
             if (statusCode === 404 || statusCode === 410) {
               staleSubIds.push(sub.id);
@@ -171,6 +173,7 @@ export async function GET(request: NextRequest) {
     checked: reminders.length,
     due: due.length,
     sent,
+    failed,
     cleaned: staleSubIds.length,
   });
 }
