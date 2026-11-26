@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import webpush from "web-push";
 import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  InvalidPushEndpointError,
+  UnsafePushAddressError,
+  sendValidatedPushNotification,
+} from "@/lib/pushEndpoint";
+import { isValidTimeZone } from "@/lib/date";
+import { localParts, timeToMinutes } from "@/lib/reminderScheduling";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,28 +31,6 @@ interface SubscriptionRow {
   endpoint: string;
   p256dh: string;
   auth: string;
-}
-
-function localParts(timeZone: string, now: Date): { date: string; minutes: number } {
-  const date = new Intl.DateTimeFormat("en-CA", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(now);
-  const hhmm = new Intl.DateTimeFormat("en-GB", {
-    timeZone,
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(now);
-  const [h, m] = hhmm.split(":").map(Number);
-  return { date, minutes: h * 60 + m };
-}
-
-function timeToMinutes(hhmm: string): number {
-  const [h, m] = hhmm.split(":").map(Number);
-  return h * 60 + m;
 }
 
 export async function GET(request: NextRequest) {
@@ -85,18 +70,20 @@ export async function GET(request: NextRequest) {
   if (profilesError) {
     return NextResponse.json({ error: profilesError.message }, { status: 500 });
   }
-  const timezoneByUser = new Map<string, string>(
-    (profiles ?? []).map((p) => [p.id as string, (p.timezone as string) || "Africa/Lagos"])
-  );
+  const timezoneByUser = new Map<string, string>();
+  for (const profile of profiles ?? []) {
+    const { id, timezone } = profile as { id: string; timezone: string | null };
+    if (!isValidTimeZone(timezone)) {
+      return NextResponse.json({ error: "A profile has a missing or invalid timezone" }, { status: 500 });
+    }
+    timezoneByUser.set(id, timezone);
+  }
+  if (userIds.some((userId) => !timezoneByUser.has(userId))) {
+    return NextResponse.json({ error: "A reminder owner has no profile timezone" }, { status: 500 });
+  }
 
   const due = (reminders as ReminderRow[]).filter((r) => {
-    const timeZone = timezoneByUser.get(r.user_id) ?? "Africa/Lagos";
-    let local;
-    try {
-      local = localParts(timeZone, now);
-    } catch {
-      local = localParts("Africa/Lagos", now);
-    }
+    const local = localParts(timezoneByUser.get(r.user_id)!, now);
     if (r.last_sent_date === local.date) return false;
     const diff = local.minutes - timeToMinutes(r.time);
     return diff >= 0 && diff < GRACE_MINUTES;
@@ -138,7 +125,7 @@ export async function GET(request: NextRequest) {
       await Promise.all(
         subs.map(async (sub) => {
           try {
-            await webpush.sendNotification(
+            await sendValidatedPushNotification(
               {
                 endpoint: sub.endpoint,
                 keys: { p256dh: sub.p256dh, auth: sub.auth },
@@ -148,6 +135,12 @@ export async function GET(request: NextRequest) {
             sent += 1;
           } catch (err) {
             failed += 1;
+            if (
+              err instanceof InvalidPushEndpointError ||
+              err instanceof UnsafePushAddressError
+            ) {
+              staleSubIds.push(sub.id);
+            }
             const statusCode = (err as { statusCode?: number }).statusCode;
             if (statusCode === 404 || statusCode === 410) {
               staleSubIds.push(sub.id);
@@ -156,7 +149,7 @@ export async function GET(request: NextRequest) {
         })
       );
 
-      const timeZone = timezoneByUser.get(reminder.user_id) ?? "Africa/Lagos";
+      const timeZone = timezoneByUser.get(reminder.user_id)!;
       const local = localParts(timeZone, now);
       await supabase
         .from("reminders")

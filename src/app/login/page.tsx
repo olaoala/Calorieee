@@ -33,6 +33,12 @@ export default async function LoginPage({
 
           <LoginForm action={login} />
 
+          <p className="text-sm text-center mt-3">
+            <Link href="/forgot-password" className="text-accent font-medium">
+              Forgot your password?
+            </Link>
+          </p>
+
           <p className="text-sm text-gray-500 mt-4 text-center">
             No account?{" "}
             <Link href="/signup" className="text-accent font-medium">
