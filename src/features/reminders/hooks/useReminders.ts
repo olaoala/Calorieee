@@ -8,7 +8,6 @@ import {
   getReminders,
   setReminderEnabled,
 } from "@/features/reminders/services/reminderService";
-import { updateTimezoneIfChanged } from "@/features/profile/services/profileService";
 import type { Reminder } from "@/lib/types";
 
 export function useReminders() {
@@ -28,13 +27,6 @@ export function useReminders() {
       }
       setUserId(user.id);
       setReminders(await getReminders(user.id));
-
-      try {
-        const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-        if (timezone) await updateTimezoneIfChanged(user.id, timezone);
-      } catch {
-        // Timezone freshness is best-effort; reminders fall back server-side.
-      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load reminders.");
     } finally {

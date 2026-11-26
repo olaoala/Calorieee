@@ -16,6 +16,11 @@ export function useMealsForDate(date: string) {
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    if (!date) {
+      setMeals([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {

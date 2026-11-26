@@ -1,15 +1,12 @@
+import { dateKeyFromInstant } from "@/lib/date";
+
 export function timeToMinutes(hhmm: string): number {
   const [h, m] = hhmm.split(":").map(Number);
   return h * 60 + m;
 }
 
 export function localParts(timeZone: string, now: Date): { date: string; minutes: number } {
-  const date = new Intl.DateTimeFormat("en-CA", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(now);
+  const date = dateKeyFromInstant(now, timeZone);
 
   const hhmm = new Intl.DateTimeFormat("en-GB", {
     timeZone,

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useRef } from "react";
-import { todayStr } from "@/lib/date";
+import { addCalendarDays, formatDateKey, todayStr } from "@/lib/date";
 import type { MealScheduleItem, MealType } from "@/lib/types";
 import { MEAL_TYPES, mealMeta } from "@/lib/mealMeta";
 import AddFoodSheet from "@/components/AddFoodSheet";
@@ -11,18 +11,11 @@ import { useMealsForDate } from "@/features/meals/hooks/useMealsForDate";
 import { useProfileSummary } from "@/features/profile/hooks/useProfileSummary";
 import { useMealSchedule } from "@/features/meals/hooks/useMealSchedule";
 
-function dateNDaysFromNow(n: number): Date {
-  const d = new Date();
-  d.setDate(d.getDate() + n);
-  return d;
-}
-function toDateKey(d: Date): string {
-  return d.toISOString().slice(0, 10);
-}
-
 export default function PlansPage() {
-  const today = todayStr();
-  const [selectedDate, setSelectedDate] = useState(today);
+  const [selectedDate, setSelectedDate] = useState("");
+  const { profile, loading: profileLoading, error: profileError } = useProfileSummary();
+  const today = profile ? todayStr(profile.timezone) : "";
+  const dateForView = selectedDate || today;
   const {
     meals,
     total,
@@ -30,8 +23,7 @@ export default function PlansPage() {
     error: mealsError,
     addMeal: addMealForDate,
     removeMeal,
-  } = useMealsForDate(selectedDate);
-  const { profile, loading: profileLoading, error: profileError } = useProfileSummary();
+  } = useMealsForDate(dateForView);
   const [sheetSlot, setSheetSlot] = useState<MealScheduleItem | null>(null);
   const [scheduleLabel, setScheduleLabel] = useState("");
   const [scheduleType, setScheduleType] = useState<MealType>("snack");
@@ -46,21 +38,22 @@ export default function PlansPage() {
   } = useMealSchedule();
 
   const days = useMemo(() => {
+    if (!today) return [];
     return Array.from({ length: 14 }, (_, i) => {
-      const d = dateNDaysFromNow(i);
+      const key = addCalendarDays(today, i);
       return {
-        key: toDateKey(d),
-        dow: i === 0 ? "Today" : d.toLocaleDateString("en-US", { weekday: "short" }),
-        num: d.getDate(),
+        key,
+        dow: i === 0 ? "Today" : formatDateKey(key, { weekday: "short" }),
+        num: formatDateKey(key, { day: "numeric" }),
         isToday: i === 0,
       };
     });
-  }, []);
+  }, [today]);
 
   async function addMeal(type: MealType, name: string, calories: number) {
     await addMealForDate(type, name, calories, sheetSlot?.id.startsWith("default-") ? undefined : sheetSlot?.id);
     show(
-      selectedDate === today
+      dateForView === today
         ? `Added to today's ${mealMeta(type).label}`
         : `Planned for ${mealMeta(type).label}`
     );
@@ -95,12 +88,20 @@ export default function PlansPage() {
   }
 
   const goal = profile?.daily_goal ?? 2000;
-  const loading = mealsLoading || profileLoading;
-  const selectedLabel = new Date(selectedDate + "T00:00:00").toLocaleDateString("en-US", {
+  const loading = mealsLoading || profileLoading || !today;
+  const selectedLabel = dateForView ? formatDateKey(dateForView, {
     weekday: "long",
     month: "short",
     day: "numeric",
-  });
+  }) : "";
+
+  if (!profileLoading && !profile) {
+    return (
+      <p className="text-sm text-danger bg-danger-light border border-red-200 rounded-md px-3 py-2">
+        {profileError ?? "Your profile timezone is unavailable."}
+      </p>
+    );
+  }
   return (
     <div className="flex flex-col gap-4 animate-fade-in">
       {(profileError || mealsError || scheduleError) && (
@@ -147,7 +148,7 @@ export default function PlansPage() {
 
       <div ref={stripRef} className="flex gap-2 overflow-x-auto no-scrollbar pb-1 -mx-4 px-4 sm:mx-0 sm:px-0">
         {days.map((d) => {
-          const selected = d.key === selectedDate;
+          const selected = d.key === dateForView;
           return (
             <button
               key={d.key}

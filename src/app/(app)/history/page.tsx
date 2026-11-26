@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { todayStr, daysAgoStr } from "@/lib/date";
+import { useEffect, useState } from "react";
+import { daysAgoStr, formatDateKey, todayStr } from "@/lib/date";
 import { MEAL_TYPES } from "@/lib/mealMeta";
 import { CalendarDays, ChevronDown } from "lucide-react";
 import { useMealsForRange } from "@/features/meals/hooks/useMealsForRange";
@@ -13,33 +13,50 @@ const RANGE_PRESETS = [
   { label: "30D", days: 29 },
 ];
 
-function formatDayLabel(dateStr: string): string {
-  const d = new Date(`${dateStr}T00:00:00`);
-  const today = todayStr();
-  const yesterday = daysAgoStr(1);
+function formatDayLabel(dateStr: string, today: string, yesterday: string): string {
   if (dateStr === today) return "Today";
   if (dateStr === yesterday) return "Yesterday";
-  return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+  return formatDateKey(dateStr, { weekday: "short", month: "short", day: "numeric" });
 }
 
 export default function HistoryPage() {
-  const [startDate, setStartDate] = useState(daysAgoStr(6));
-  const [endDate, setEndDate] = useState(todayStr());
+  const { profile, loading: profileLoading, error: profileError } = useProfileSummary();
+  const timeZone = profile?.timezone;
+  const today = timeZone ? todayStr(timeZone) : "";
+  const yesterday = timeZone && today ? daysAgoStr(1, timeZone) : "";
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [expandedDate, setExpandedDate] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (timeZone && today && !startDate && !endDate) {
+      setStartDate(daysAgoStr(6, timeZone));
+      setEndDate(today);
+    }
+  }, [endDate, startDate, timeZone, today]);
+
   const { days, totalConsumed, loading: mealsLoading, error: mealsError } = useMealsForRange(
     startDate,
     endDate
   );
-  const { profile, loading: profileLoading, error: profileError } = useProfileSummary();
 
   function selectPreset(days: number) {
-    setStartDate(daysAgoStr(days));
-    setEndDate(todayStr());
+    if (!timeZone) return;
+    setStartDate(daysAgoStr(days, timeZone));
+    setEndDate(today);
   }
 
   const goal = profile?.daily_goal ?? 2000;
-  const loading = mealsLoading || profileLoading;
+  const loading = mealsLoading || profileLoading || !today;
   const avgPerDay = days.length > 0 ? Math.round(totalConsumed / days.length) : 0;
+
+  if (!profileLoading && !profile) {
+    return (
+      <p className="text-sm text-danger bg-danger-light border border-red-200 rounded-md px-3 py-2">
+        {profileError ?? "Your profile timezone is unavailable."}
+      </p>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-4 animate-fade-in">
@@ -54,7 +71,8 @@ export default function HistoryPage() {
         </h2>
         <div className="flex gap-1.5 mb-3">
           {RANGE_PRESETS.map((p) => {
-            const active = startDate === daysAgoStr(p.days) && endDate === todayStr();
+            const active =
+              !!timeZone && startDate === daysAgoStr(p.days, timeZone) && endDate === today;
             return (
               <button
                 key={p.label}
@@ -92,7 +110,7 @@ export default function HistoryPage() {
               type="date"
               value={endDate}
               min={startDate}
-              max={todayStr()}
+              max={today || undefined}
               onChange={(e) => setEndDate(e.target.value)}
               className="w-full border border-gray-200 rounded-md pl-9 pr-2 py-2.5 text-sm"
             />
@@ -141,7 +159,7 @@ export default function HistoryPage() {
                     >
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-semibold text-gray-900">
-                          {formatDayLabel(day.date)}
+                          {formatDayLabel(day.date, today, yesterday)}
                         </div>
                         <div className="text-xs text-gray-400">
                           {day.meals.length} item{day.meals.length > 1 ? "s" : ""}
