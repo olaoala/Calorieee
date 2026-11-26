@@ -155,7 +155,16 @@ create policy "profiles: owner read/write" on public.profiles
 
 drop policy if exists "meals: owner read/write" on public.meals;
 create policy "meals: owner read/write" on public.meals
-  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+  for all using (auth.uid() = user_id) with check (
+    auth.uid() = user_id
+    and (
+      schedule_id is null
+      or exists (
+        select 1 from public.meal_schedule s
+        where s.id = schedule_id and s.user_id = auth.uid()
+      )
+    )
+  );
 
 drop policy if exists "meal_templates: owner read/write" on public.meal_templates;
 create policy "meal_templates: owner read/write" on public.meal_templates
@@ -177,13 +186,15 @@ drop policy if exists "weight_logs: owner read/write" on public.weight_logs;
 create policy "weight_logs: owner read/write" on public.weight_logs
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
--- meal_plan_items has no user_id directly; gate through the parent plan
+-- meal_plan_items has no user_id directly; gate both referenced rows through the caller.
 drop policy if exists "meal_plan_items: owner read/write" on public.meal_plan_items;
 create policy "meal_plan_items: owner read/write" on public.meal_plan_items
   for all using (
     exists (select 1 from public.meal_plans p where p.id = plan_id and p.user_id = auth.uid())
+    and exists (select 1 from public.meal_templates t where t.id = template_id and t.user_id = auth.uid())
   ) with check (
     exists (select 1 from public.meal_plans p where p.id = plan_id and p.user_id = auth.uid())
+    and exists (select 1 from public.meal_templates t where t.id = template_id and t.user_id = auth.uid())
   );
 
 -- ---------- Auto-create a profile row on signup ----------
