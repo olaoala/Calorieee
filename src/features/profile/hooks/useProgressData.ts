@@ -8,7 +8,7 @@ import {
   getWeightSeries,
   upsertWeight,
 } from "@/features/profile/services/profileService";
-import { todayStr } from "@/lib/date";
+import { addCalendarDays, formatDateKey, todayStr } from "@/lib/date";
 
 export interface DayTotal {
   date: string;
@@ -16,14 +16,9 @@ export interface DayTotal {
   total: number;
 }
 
-function dateNDaysAgo(n: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - n);
-  return d.toISOString().slice(0, 10);
-}
-
 export function useProgressData() {
   const [userId, setUserId] = useState<string | null>(null);
+  const [timeZone, setTimeZone] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [goal, setGoal] = useState(2000);
@@ -44,10 +39,12 @@ export function useProgressData() {
         return;
       }
       setUserId(user.id);
-      const start30 = dateNDaysAgo(29);
-      const [profile, mealRows, weightRows] = await Promise.all([
-        getProfileSummary(user.id),
-        getMealsForRange(user.id, start30, todayStr()),
+      const profile = await getProfileSummary(user.id);
+      setTimeZone(profile.timezone);
+      const today = todayStr(profile.timezone);
+      const start30 = addCalendarDays(today, -29);
+      const [mealRows, weightRows] = await Promise.all([
+        getMealsForRange(user.id, start30, today),
         getWeightSeries(user.id),
       ]);
 
@@ -61,10 +58,8 @@ export function useProgressData() {
 
       const last7: DayTotal[] = [];
       for (let i = 6; i >= 0; i--) {
-        const date = dateNDaysAgo(i);
-        const label = new Date(date + "T00:00:00").toLocaleDateString("en-US", {
-          weekday: "narrow",
-        });
+        const date = addCalendarDays(today, -i);
+        const label = formatDateKey(date, { weekday: "narrow" });
         last7.push({ date, label, total: totals[date] ?? 0 });
       }
       setWeek(last7);
@@ -86,7 +81,7 @@ export function useProgressData() {
 
       let currentStreak = 0;
       for (let i = 0; i < 30; i++) {
-        const date = dateNDaysAgo(i);
+        const date = addCalendarDays(today, -i);
         if (totals[date] > 0) currentStreak++;
         else break;
       }
@@ -119,10 +114,11 @@ export function useProgressData() {
   const logWeight = useCallback(
     async (weightKg: number) => {
       if (!userId) return;
-      await upsertWeight(userId, todayStr(), weightKg);
+      if (!timeZone) throw new Error("Your profile timezone is unavailable.");
+      await upsertWeight(userId, todayStr(timeZone), weightKg);
       await load();
     },
-    [load, userId]
+    [load, timeZone, userId]
   );
 
   return {

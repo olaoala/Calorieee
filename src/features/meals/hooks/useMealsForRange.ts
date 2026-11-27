@@ -17,6 +17,11 @@ export function useMealsForRange(startDate: string, endDate: string) {
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    if (!startDate || !endDate) {
+      setMeals([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {

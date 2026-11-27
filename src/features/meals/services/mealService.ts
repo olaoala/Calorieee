@@ -1,7 +1,9 @@
 import { createClient } from "@/lib/supabase/client";
+import { assertDateKey } from "@/lib/date";
 import type { Meal, MealType } from "@/lib/types";
 
 export async function getMealsForDate(userId: string, date: string): Promise<Meal[]> {
+  assertDateKey(date);
   const supabase = createClient();
   const { data, error } = await supabase
     .from("meals")
@@ -19,6 +21,11 @@ export async function getMealsForRange(
   startDate: string,
   endDate: string
 ): Promise<Meal[]> {
+  assertDateKey(startDate);
+  assertDateKey(endDate);
+  if (startDate > endDate) {
+    throw new RangeError("Start date must be on or before end date.");
+  }
   const supabase = createClient();
   const { data, error } = await supabase
     .from("meals")
@@ -41,6 +48,7 @@ export async function addMealForDate(
   calories: number,
   scheduleId?: string
 ): Promise<void> {
+  assertDateKey(date);
   const supabase = createClient();
   const { error } = await supabase.from("meals").insert({
     user_id: userId,

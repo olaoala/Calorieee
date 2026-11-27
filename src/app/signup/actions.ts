@@ -19,7 +19,7 @@ export async function signup(formData: FormData) {
     redirect(`/signup?error=${encodeURIComponent("Enter your name.")}`);
   }
 
-  const { error } = await supabase.auth.signUp({
+  const { data, error } = await supabase.auth.signUp({
     email,
     password,
     options: {
@@ -37,7 +37,17 @@ export async function signup(formData: FormData) {
   });
 
   if (error) {
+    if (
+      error.code === "user_already_exists" ||
+      error.message.toLowerCase().includes("already registered")
+    ) {
+      redirect("/signup?check_email=1");
+    }
     redirect(`/signup?error=${encodeURIComponent(error.message)}`);
+  }
+
+  if (data.user?.identities?.length === 0) {
+    redirect("/signup?check_email=1");
   }
 
   redirect("/signup?check_email=1");

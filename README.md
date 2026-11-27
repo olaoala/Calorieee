@@ -31,6 +31,10 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000). You'll be redirected to `/signup` to create an account (Supabase sends a confirmation email by default — check your inbox, or disable email confirmation in Supabase Auth settings for faster local testing).
 
+To reset a forgotten password, choose **Forgot your password?** on the login page. Supabase must allow the app's reset URL in its Authentication redirect URL settings (for local development, add `http://localhost:3000/auth/callback`).
+
+To permanently delete an account for local/admin recovery, configure `SUPABASE_SERVICE_ROLE_KEY` in `.env.local` and run `npm run auth:delete-user`. The script looks up the account by email, displays the matched email and ID, and requires typing the email exactly before deletion. Deleting an auth user also permanently deletes that user's app data.
+
 Note: this project's `node_modules` may already contain a partial/interrupted install from initial scaffolding. If `npm run dev` complains about missing or broken packages, delete `node_modules` and reinstall:
 
 ```

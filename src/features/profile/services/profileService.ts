@@ -1,9 +1,10 @@
 import { createClient } from "@/lib/supabase/client";
+import { assertDateKey, assertValidTimeZone } from "@/lib/date";
 import type { GoalType, Profile, WeightLog } from "@/lib/types";
 
 export type ProfileSummary = Pick<
   Profile,
-  "daily_goal" | "water_target" | "full_name" | "goal_type" | "weight_goal_kg"
+  "daily_goal" | "water_target" | "full_name" | "goal_type" | "weight_goal_kg" | "timezone"
 >;
 
 export interface ProfileGoalUpdate {
@@ -16,17 +17,19 @@ export async function getProfileSummary(userId: string): Promise<ProfileSummary>
   const supabase = createClient();
   const { data, error } = await supabase
     .from("profiles")
-    .select("daily_goal, water_target, full_name, goal_type, weight_goal_kg")
+    .select("daily_goal, water_target, full_name, goal_type, weight_goal_kg, timezone")
     .eq("id", userId)
     .single();
 
   if (error) throw error;
+  assertValidTimeZone(data.timezone);
   return {
     daily_goal: data.daily_goal,
     water_target: data.water_target ?? 8,
     full_name: data.full_name ?? null,
     goal_type: (data.goal_type ?? "maintain") as GoalType,
     weight_goal_kg: data.weight_goal_kg ?? null,
+    timezone: data.timezone,
   };
 }
 
@@ -66,6 +69,7 @@ export async function getWeightSeries(userId: string): Promise<Pick<WeightLog, "
 }
 
 export async function upsertWeight(userId: string, date: string, weightKg: number): Promise<void> {
+  assertDateKey(date);
   const supabase = createClient();
   const { error } = await supabase
     .from("weight_logs")
@@ -74,30 +78,12 @@ export async function upsertWeight(userId: string, date: string, weightKg: numbe
   if (error) throw error;
 }
 
-export async function updateTimezoneIfChanged(userId: string, timezone: string): Promise<void> {
-  const supabase = createClient();
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("timezone")
-    .eq("id", userId)
-    .single();
-
-  if (error) throw error;
-  if (data.timezone === timezone) return;
-
-  const { error: updateError } = await supabase
-    .from("profiles")
-    .update({ timezone })
-    .eq("id", userId);
-
-  if (updateError) throw updateError;
-}
-
 export async function upsertWaterLog(
   userId: string,
   date: string,
   cups: number
 ): Promise<void> {
+  assertDateKey(date);
   const supabase = createClient();
   const { error } = await supabase
     .from("water_logs")
@@ -107,6 +93,7 @@ export async function upsertWaterLog(
 }
 
 export async function getWaterCups(userId: string, date: string): Promise<number> {
+  assertDateKey(date);
   const supabase = createClient();
   const { data, error } = await supabase
     .from("water_logs")

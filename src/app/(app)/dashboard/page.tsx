@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { todayStr } from "@/lib/date";
+import { formatDateKey, todayStr } from "@/lib/date";
 import type { MealType } from "@/lib/types";
 import { MEAL_TYPES, mealMeta } from "@/lib/mealMeta";
 import AddFoodSheet from "@/components/AddFoodSheet";
@@ -10,12 +10,18 @@ import Link from "next/link";
 import { Plus, Droplet, Minus, Flame } from "lucide-react";
 import { useMealsForDate } from "@/features/meals/hooks/useMealsForDate";
 import { useDashboardProfile } from "@/features/profile/hooks/useDashboardProfile";
+import { useUserTimezone } from "@/features/profile/hooks/useUserTimezone";
 
 const RADIUS = 50;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
 export default function DashboardPage() {
-  const today = todayStr();
+  const {
+    timeZone,
+    loading: timezoneLoading,
+    error: timezoneError,
+  } = useUserTimezone();
+  const today = timeZone ? todayStr(timeZone) : "";
   const {
     email,
     profile,
@@ -40,7 +46,7 @@ export default function DashboardPage() {
     show(`Added to ${mealMeta(type).label}`);
   }
 
-  if (profileLoading || mealsLoading) {
+  if (timezoneLoading || profileLoading || mealsLoading) {
     return (
       <div className="flex flex-col gap-4 animate-pulse">
         <div className="h-40 bg-white border border-gray-200 rounded-2xl" />
@@ -51,6 +57,14 @@ export default function DashboardPage() {
     );
   }
 
+  if (!timeZone) {
+    return (
+      <p className="text-sm text-danger bg-danger-light border border-red-200 rounded-md px-3 py-2">
+        {timezoneError ?? "Your profile timezone is unavailable."}
+      </p>
+    );
+  }
+
   const goal = profile?.daily_goal ?? 2000;
   const waterTarget = profile?.water_target ?? 8;
   const fullName = profile?.full_name ?? null;
@@ -58,7 +72,7 @@ export default function DashboardPage() {
   const remaining = goal - consumed;
   const pct = Math.min(consumed / goal, 1) || 0;
   const dashoffset = CIRCUMFERENCE * (1 - pct);
-  const dateLabel = new Date().toLocaleDateString("en-US", {
+  const dateLabel = formatDateKey(today, {
     weekday: "long",
     month: "short",
     day: "numeric",

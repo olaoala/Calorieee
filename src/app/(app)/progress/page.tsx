@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Flame, Scale, Plus } from "lucide-react";
 import { useProgressData } from "@/features/profile/hooks/useProgressData";
+import { formatDateKey } from "@/lib/date";
 
 export default function ProgressPage() {
   const {
@@ -141,7 +142,7 @@ export default function ProgressPage() {
             <WeightSparkline data={weightSeries} />
             <p className="text-xs text-gray-400 mt-2">
               Latest: {latestWeight.weight_kg} kg on{" "}
-              {new Date(latestWeight.date + "T00:00:00").toLocaleDateString("en-US", {
+              {formatDateKey(latestWeight.date, {
                 month: "short",
                 day: "numeric",
               })}

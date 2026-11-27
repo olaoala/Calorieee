@@ -28,10 +28,8 @@ export function useDashboardProfile(date: string) {
       }
       setUserId(user.id);
       setEmail(user.email ?? "");
-      const [profileData, cups] = await Promise.all([
-        getProfileSummary(user.id),
-        getWaterCups(user.id, date),
-      ]);
+      const profileData = await getProfileSummary(user.id);
+      const cups = date ? await getWaterCups(user.id, date) : 0;
       setProfile(profileData);
       setWaterCupsState(cups);
     } catch (err) {

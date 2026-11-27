@@ -1,0 +1,2 @@
+# Store text files with LF in the repository; Windows checkouts may use CRLF locally.
+* text=auto
